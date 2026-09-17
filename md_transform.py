@@ -1,49 +1,302 @@
-#  REPLACING THESE COMMANDS WITH A SINGLE PYTHON SCRIPT
-#   pandoc --quiet \
-#           --from=markdown-markdown_in_html_blocks+raw_html+auto_identifiers+header_attributes \
-#           "tmp.md" -o "tmp.xml" \
-#           --template="$script_dir/template.xml"
-
-#   # Apply XSLT transformation
-#   xmlstarlet tr "$script_dir/markdown.xsl" "tmp.xml" > "$output_dir/${base_name}.html"
-#   if [ $? -eq 0 ]; then
-#     echo "\033[0;32m*** success ***\033[0m"
-#   else
-#     echo "\033[0;31m*** fail ***\033[0m"
-#   fi
-
-
+import re
 import sys
 import os
-import pypandoc
 import lxml.etree as etree
 from read_markdown import read_markdown
 from md_expand import resolve_inclusions
 
-def transform_markdown(document_params, markdown, xslt_file='markdown.xsl'):
-  try:
-    html_content = pypandoc.convert_text(
-      markdown, 'html', format='md')
+# INLINE_RE = re.compile(
+#     r"""
+#     (`[^`]+`)                |  # code
+#     (\*\*[^*]+\*\*)          |  # bold
+#     (__[^_]+__)              |  # bold
+#     (\*[^*]+\*)              |  # italic
+#     (_[^_]+_)                   # italic
+#     """,
+#     re.VERBOSE,
+# )
 
-    # print(f"html content >>>>>>>>>>>>>>>>>: {html_content}", file=sys.stderr)
-    # Parse the XSLT file and apply the transformation
-    xslt_root = etree.parse(xslt_file)
-    transform = etree.XSLT(xslt_root)
-    doc = etree.Element("document", **{str(k): str(v) for k, v in document_params.items()})
-    doc.append(etree.fromstring(f"<content>{html_content}</content>", parser=etree.HTMLParser()).find("body/content"))
-    html_tree = doc
-    # print(f"html_tree >>>>>>>>>>>>>>>>>: {etree.tostring(html_tree, pretty_print=True, encoding='unicode')}", file=sys.stderr)
 
-    return str(transform(html_tree))
+# def parse_inline(text, parent):
+#     pos = 0
 
-  except KeyError as e:
-    print(f"incomplete data in transform_mail {e}", file=sys.stderr)
+#     for match in INLINE_RE.finditer(text):
+#         # Plain text before the match
+#         if match.start() > pos:
+#             append_text(parent, text[pos:match.start()])
 
-  except Exception as e:
-    print(f"unexpected error transforming: {e}", file=sys.stderr)
+#         value = match.group(0)
 
-  return None
+#         if value.startswith("`"):
+#             element = etree.SubElement(parent, "code")
+#             element.text = value[1:-1]
 
+#         elif value.startswith(("**", "__")):
+#             element = etree.SubElement(parent, "strong")
+#             element.text = value[2:-2]
+
+#         elif value.startswith(("*", "_")):
+#             element = etree.SubElement(parent, "em")
+#             element.text = value[1:-1]
+
+#         pos = match.end()
+
+#     # Remaining plain text
+#     if pos < len(text):
+#         append_text(parent, text[pos:])
+
+
+# def append_text(parent, text):
+#     if len(parent):
+#         last = parent[-1]
+#         last.tail = (last.tail or "") + text
+#     else:
+#         parent.text = (parent.text or "") + text
+
+# def transform_markdown(document_params, markdown, xslt_file='markdown.xsl'):
+#   try:
+
+#     # print(f"html content >>>>>>>>>>>>>>>>>: {html_content}", file=sys.stderr)
+#     # Parse the XSLT file and apply the transformation
+#     xslt_root = etree.parse(xslt_file)
+#     transform = etree.XSLT(xslt_root)
+#     doc = etree.Element("document", **{str(k): str(v) for k, v in document_params.items()})
+
+#     content = etree.SubElement(doc, "content")
+
+#     for line in markdown.splitlines():
+#         line = line.rstrip()
+
+#         if not line:
+#             continue
+
+#         if line.startswith("# "):
+#             element = etree.SubElement(content, "h1")
+#             element.text = line[2:]
+#             continue
+
+#         if line.startswith("## "):
+#             element = etree.SubElement(content, "h2")
+#             element.text = line[3:]
+#             continue
+
+#         if line.startswith("### "):
+#             element = etree.SubElement(content, "h3")
+#             element.text = line[4:]
+#             continue
+
+#         element = etree.SubElement(content, "p")
+#         parse_inline(line, element)
+
+#     # doc.append(etree.fromstring(f"<content>{html_content}</content>", parser=etree.HTMLParser()).find("body/content"))
+#     # html_tree = doc
+#     print(f"html_tree >>>>>>>>>>>>>>>>>: {etree.tostring(doc, pretty_print=True, encoding='unicode')}", file=sys.stderr)
+
+
+#     return str(transform(doc))
+
+#   except KeyError as e:
+#     print(f"incomplete data in transform_mail {e}", file=sys.stderr)
+
+#   except Exception as e:
+#     print(f"unexpected error transforming: {e}", file=sys.stderr)
+
+#   return None
+
+INLINE_RE = re.compile(
+    r"""
+    (`[^`]+`) |
+    (\*\*.+?\*\*) |
+    (__.+?__) |
+    (\*.+?\*) |
+    (_.+?_) |
+    (!\[[^\]]*\]\([^)]+\)) |
+    (\[[^\]]+\]\([^)]+\))
+    """,
+    re.VERBOSE,
+)
+
+
+def append_text(element, text):
+    if not text:
+        return
+
+    if len(element):
+        child = element[-1]
+        child.tail = (child.tail or "") + text
+    else:
+        element.text = (element.text or "") + text
+
+
+def parse_inline(text, element):
+    pos = 0
+
+    for match in INLINE_RE.finditer(text):
+        append_text(element, text[pos:match.start()])
+
+        value = match.group(0)
+
+        if value.startswith("`"):
+            child = etree.SubElement(element, "code")
+            child.text = value[1:-1]
+
+        elif value.startswith(("**", "__")):
+            child = etree.SubElement(element, "strong")
+            child.text = value[2:-2]
+
+        elif value.startswith(("*", "_")):
+            child = etree.SubElement(element, "em")
+            child.text = value[1:-1]
+
+        elif value.startswith("!["):
+            match_image = re.match(r"!\[([^\]]*)\]\(([^)]+)\)", value)
+            child = etree.SubElement(element, "img")
+            child.set("alt", match_image.group(1))
+            child.set("src", match_image.group(2))
+
+        elif value.startswith("["):
+            match_link = re.match(r"\[([^\]]+)\]\(([^)]+)\)", value)
+            child = etree.SubElement(element, "a")
+            child.set("href", match_link.group(2))
+            child.text = match_link.group(1)
+
+        pos = match.end()
+
+    append_text(element, text[pos:])
+
+
+def flush_paragraph(content, lines):
+    if not lines:
+        return
+
+    element = etree.SubElement(content, "p")
+
+    for index, line in enumerate(lines):
+        # Three trailing spaces = hard line break
+        hard_break = line.endswith("   ")
+
+        if hard_break:
+            line = line[:-3]
+
+        parse_inline(line, element)
+
+        if hard_break and index < len(lines) - 1:
+            etree.SubElement(element, "br")
+
+        elif index < len(lines) - 1:
+            append_text(element, " ")
+
+
+def parse_markdown(markdown, document_params=None):
+    document_params = document_params or {}
+
+    doc = etree.Element(
+        "document",
+        **{str(k): str(v) for k, v in document_params.items()},
+    )
+
+    content = etree.SubElement(doc, "content")
+
+    paragraph_lines = []
+    code_lines = []
+    in_code = False
+    code_language = None
+    current_list = None
+
+    def flush():
+        nonlocal paragraph_lines
+        flush_paragraph(content, paragraph_lines)
+        paragraph_lines = []
+
+
+    def flush_list():
+        nonlocal current_list
+        current_list = None
+
+    for line in markdown.splitlines():
+
+        # ------------------------------------------------------------
+        # Fenced code block
+        # ------------------------------------------------------------
+
+        if in_code:
+            if line.startswith("```"):
+                element = etree.SubElement(content, "pre")
+                code = etree.SubElement(element, "code")
+
+                if code_language:
+                    code.set("class", f"language-{code_language}")
+
+                code.text = "\n".join(code_lines) + "\n"
+
+                code_lines = []
+                code_language = None
+                in_code = False
+            else:
+                code_lines.append(line)
+
+            continue
+
+        if line.startswith("```"):
+            flush()
+
+            in_code = True
+            code_language = line[3:].strip() or None
+            continue
+
+        # ------------------------------------------------------------
+        # Blank line terminates a paragraph
+        # ------------------------------------------------------------
+
+        if not line.strip():
+            flush()
+            continue
+
+        # ------------------------------------------------------------
+        # Headings
+        # ------------------------------------------------------------
+
+        match = re.match(r"^(#{1,6})\s+(.*)$", line)
+
+        if match:
+            flush()
+
+            level = len(match.group(1))
+            element = etree.SubElement(content, f"h{level}")
+            parse_inline(match.group(2), element)
+            continue
+
+        # ------------------------------------------------------------
+        # Unordered list
+        # ------------------------------------------------------------
+
+        match = re.match(r"^\s*[-*+]\s+(.*)$", line)
+
+        if match:
+            flush()
+
+            if current_list is None:
+                current_list = etree.SubElement(content, "ul")
+
+            element = etree.SubElement(current_list, "li")
+            parse_inline(match.group(1), element)
+            continue
+
+        # ------------------------------------------------------------
+        # Normal paragraph line
+        # ------------------------------------------------------------
+        flush_list()
+        paragraph_lines.append(line)
+
+    # Flush anything left at EOF
+    if in_code:
+        element = etree.SubElement(content, "pre")
+        code = etree.SubElement(element, "code")
+        code.text = "\n".join(code_lines) + "\n"
+    else:
+        flush()
+
+    return doc
 
 def process_markdown_file_to_stdout(md_file, xslt_file='markdown.xsl'):
     """
@@ -67,13 +320,23 @@ def process_markdown_file_to_stdout(md_file, xslt_file='markdown.xsl'):
     if not metadata:
       metadata = {}
 
-    # Transform the markdown to HTML
+    try:
+      # resolved_markdown = resolve_inclusions(markdown)
+      xml = parse_markdown(markdown, metadata)
 
-    # resolved_markdown = resolve_inclusions(markdown)
-    # resolved_markdown_plus_footer =  resolved_markdown + "\n\n<!-- Footer content can be added here -->"
+      xslt_root = etree.parse(xslt_file)
+      transform = etree.XSLT(xslt_root)
+      # debugger output
+      # print(etree.tostring(xml, pretty_print=True, encoding='unicode'), file=sys.stderr)
+      sys.stdout.write(str(transform(xml)))
+    except KeyError as e:
+      print(f"incomplete data in transform_mail {e}", file=sys.stderr)
 
-    html = transform_markdown(metadata, markdown, xslt_file)
-    sys.stdout.write(html)
+    except Exception as e:
+      print(f"unexpected error transforming: {e}", file=sys.stderr)
+
+    
+    
 
 # Example usage
 if __name__ == "__main__":
