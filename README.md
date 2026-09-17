@@ -29,7 +29,7 @@ For example:
 
 Markdown to Website uses XSLT to transform the XML output
 
-The transformation is defined in [`markdown.xslt`](markdown.xslt).
+The transformation is defined in [`markdown.xsl`](markdown.xsl).
 
 This makes the presentation layer independent from the Markdown itself. Modify the XSLT stylesheet to change the generated HTML without changing your Markdown files.
 
