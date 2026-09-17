@@ -1,12 +1,13 @@
 # Markdown to Website Converter
 
-A small shell-based Markdown to HTML converter using [Pandoc](https://pandoc.org/) and XSLT.
+A small shell-based Markdown to HTML converter with minimal dependencies.
 
-The goal is to turn a directory of Markdown files into a website while preserving the directory structure.
+The converter supports a subset of markdown features. With more advanced features intentionally ignored by the parser.
+
+The goal is to create a markdown to html pipeline
 
 ## Requirements
 
-* [Pandoc](https://pandoc.org/)
 * Python
 * POSIX-compatible shell environment
 
