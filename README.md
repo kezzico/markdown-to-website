@@ -41,19 +41,16 @@ The conversion pipeline is intentionally simple:
 Markdown
    │
    ▼
- Pandoc
+  XML
    │
    ▼
- HTML
-   │
-   ▼
- markdown.xslt
+markdown.xslt
    │
    ▼
  Website
 ```
 
-Pandoc handles Markdown parsing and produces the initial HTML representation. The XSLT stylesheet then transforms that output into the final HTML used by the website.
+A custom parser handles Markdown parsing and produces the initial HTML representation. The XSLT stylesheet then transforms that output into the final HTML used by the website.
 
 ## Metadata
 
