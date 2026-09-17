@@ -14,6 +14,7 @@
 
 
 import sys
+import os
 import pypandoc
 import lxml.etree as etree
 from read_markdown import read_markdown
@@ -24,22 +25,22 @@ def transform_markdown(document_params, markdown, xslt_file='markdown.xsl'):
     html_content = pypandoc.convert_text(
       markdown, 'html', format='md')
 
-    # print(f"html content >>>>>>>>>>>>>>>>>: {html_content}")
+    # print(f"html content >>>>>>>>>>>>>>>>>: {html_content}", file=sys.stderr)
     # Parse the XSLT file and apply the transformation
     xslt_root = etree.parse(xslt_file)
     transform = etree.XSLT(xslt_root)
     doc = etree.Element("document", **{str(k): str(v) for k, v in document_params.items()})
     doc.append(etree.fromstring(f"<content>{html_content}</content>", parser=etree.HTMLParser()).find("body/content"))
     html_tree = doc
-    # print(f"html_tree >>>>>>>>>>>>>>>>>: {etree.tostring(html_tree, pretty_print=True, encoding='unicode')}")
+    # print(f"html_tree >>>>>>>>>>>>>>>>>: {etree.tostring(html_tree, pretty_print=True, encoding='unicode')}", file=sys.stderr)
 
     return str(transform(html_tree))
 
   except KeyError as e:
-    print(f"incomplete data in transform_mail {e}")
+    print(f"incomplete data in transform_mail {e}", file=sys.stderr)
 
   except Exception as e:
-    print(f"unexpected error transforming: {e}")
+    print(f"unexpected error transforming: {e}", file=sys.stderr)
 
   return None
 
@@ -48,20 +49,23 @@ def process_markdown_file_to_stdout(md_file, xslt_file='markdown.xsl'):
     """
     Process the input markdown file and output the result to stdout.
     """
+    
     metadata, markdown = read_markdown(md_file)
     # print(f"Processing markdown file: {md_file}")
     # print(f"Metadata: {metadata}")
     # print(f"Markdown content length: {len(markdown)} characters")
     # Transform the markdown to HTML using the provided XSLT file
     if not markdown:
-        print("No markdown content to transform.")
+        print("No markdown content to transform.", file=sys.stderr)
         return
     if not xslt_file:
-        print("No XSLT file provided for transformation.")
-        return
+      print("No XSLT file provided for transformation.", file=sys.stderr)
+      return
+    if not os.path.isfile(xslt_file):
+      print(f"XSLT file not found: {xslt_file}", file=sys.stderr)
+      return
     if not metadata:
-        print("No metadata found in the markdown file.")
-        return
+      metadata = {}
 
     # Transform the markdown to HTML
 
